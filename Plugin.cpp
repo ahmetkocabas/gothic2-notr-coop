@@ -125,12 +125,16 @@ namespace GOTHIC_ENGINE {
             AutoTestMark("PulseBroadcastNpcs");
 
             PluginState = "UpdateSyncNpcs";
-            for (auto const& pair : SyncNpcs) {
-                auto npc = pair.second;
+            // erase() inside a range-for left the loop on a freed node; advance with erase's result
+            for (auto it = SyncNpcs.begin(); it != SyncNpcs.end();) {
+                auto npc = it->second;
                 npc->Update();
 
                 if (npc->destroyed) {
-                    SyncNpcs.erase(pair.first);
+                    it = SyncNpcs.erase(it);
+                }
+                else {
+                    ++it;
                 }
             }
             AutoTestMark("UpdateSyncNpcs");
