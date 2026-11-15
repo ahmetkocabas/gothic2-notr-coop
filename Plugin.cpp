@@ -29,6 +29,8 @@ namespace GOTHIC_ENGINE {
             Message::Error(configFilePath.c_str());
             exit(1);
         }
+
+        InstallMultiInstanceHooks();
     }
 
     void Game_Init() {
@@ -80,21 +82,29 @@ namespace GOTHIC_ENGINE {
         }
 
         CurrentMs = GetCurrentMs();
+        AutoTestMark(NULL);
         GameChat->Render();
         GameStatsLoop();
+        AutoTestMark("ChatAndStats");
         PacketProcessorLoop();
+        AutoTestMark("PacketProcessorLoop");
         DamageProcessorLoop();
         SpellCastProcessorLoop();
         ReviveFriendLoop();
+        AutoTestMark("DamageSpellRevive");
+        AutoTestLoop();
+        AutoTestMark("AutoTestLoop");
 
         if (CurrentMs > LastNpcListRefreshTime + 1000) {
             BuildGlobalNpcList();
+            AutoTestMark("BuildGlobalNpcList");
             LastNpcListRefreshTime = CurrentMs;
             PluginState = "GameLoop";
         }
 
         if (CurrentMs > LastUpdateListOfVisibleNpcs + 500) {
             UpdateVisibleNpc();
+            AutoTestMark("UpdateVisibleNpc");
             LastUpdateListOfVisibleNpcs = CurrentMs;
             PluginState = "GameLoop";
         }
@@ -105,12 +115,14 @@ namespace GOTHIC_ENGINE {
                 Myself->Pulse();
                 Myself->PackUpdate();
             }
+            AutoTestMark("PulseMyself");
 
             PluginState = "PulseBroadcastNpcs";
             for (auto p : BroadcastNpcs) {
                 p.second->Pulse();
                 p.second->PackUpdate();
             }
+            AutoTestMark("PulseBroadcastNpcs");
 
             PluginState = "UpdateSyncNpcs";
             for (auto const& pair : SyncNpcs) {
@@ -121,6 +133,7 @@ namespace GOTHIC_ENGINE {
                     SyncNpcs.erase(pair.first);
                 }
             }
+            AutoTestMark("UpdateSyncNpcs");
 
             PluginState = "DisplayPing";
             if (ClientThread && CurrentPing > 0) {
@@ -139,30 +152,12 @@ namespace GOTHIC_ENGINE {
         PluginState = "KeysPressedChecks";
         if (!IsPlayerTalkingWithAnybody() && !WorldEditMode) {
             if (zinput->KeyToggled(StartServerKey) && !ServerThread && !ClientThread) {
-                wchar_t mappedPort[1234];
-                std::wcsncpy(mappedPort, L"UDP", 1234);
-                new MappedPort(ConnectionPort, mappedPort, mappedPort);
-
-                Thread t;
-                t.Init(&CoopServerThread);
-                t.Detach();
-                ServerThread = &t;
-                MyselfId = "HOST";
-                player->SetAdditionalVisuals(zSTRING("hum_body_Naked0"), MyBodyTextVarNr, DefaultBodyTexColorNr, zSTRING("HUM_HEAD_PONY"), MyHeadVarNr, 0, -1);
+                StartCoopServer();
             }
 
             if (zinput->KeyToggled(StartConnectionKey) && !ServerThread) {
                 if (!ClientThread) {
-                    addSyncedNpc("HOST");
-
-                    Thread  t;
-                    t.Init(&CoopClientThread);
-                    t.Detach();
-                    ClientThread = &t;
-
-                    ogame->SetTime(ogame->GetWorldTimer()->GetDay(), 12, 00);
-                    rtnMan->RestartRoutines();
-                    player->SetAdditionalVisuals(zSTRING("hum_body_Naked0"), MyBodyTextVarNr, DefaultBodyTexColorNr, zSTRING("HUM_HEAD_PONY"), MyHeadVarNr, 0, -1);
+                    StartCoopClient();
                 }
                 else {
                     if (IsCoopPaused) {
@@ -232,6 +227,7 @@ namespace GOTHIC_ENGINE {
         }
 
         PluginState = "GameLoop_End";
+        AutoTestMark("KeysAndMyselfInit");
     }
 
     void Game_SaveBegin() {

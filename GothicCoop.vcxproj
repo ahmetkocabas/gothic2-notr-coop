@@ -1020,6 +1020,9 @@
       </SubType>
     </ClInclude>
     <ClInclude Include="resource.h" />
+    <ClInclude Include="AutoTest.cpp" />
+    <ClInclude Include="MultiInstance.cpp" />
+    <ClInclude Include="CoopSession.cpp" />
     <ClInclude Include="ReviveFriendLoop.cpp">
       <SubType>
       </SubType>

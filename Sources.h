@@ -24,6 +24,9 @@
 #include "SpellCastProcessor.cpp"
 #include "ReviveFriendLoop.cpp"
 #include "Hooks.cpp"
+#include "CoopSession.cpp"
+#include "MultiInstance.cpp"
+#include "AutoTest.cpp"
 #include "Plugin.cpp"
 #include "UnionHooks.cpp"
 #pragma endregion
