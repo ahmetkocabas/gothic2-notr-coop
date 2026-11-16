@@ -46,7 +46,8 @@ namespace GOTHIC_ENGINE {
 
         auto& c = CoopConfig["autotest"];
         AutoTestRole = c.value("role", std::string(""));
-        if (AutoTestRole != "server" && AutoTestRole != "client") {
+        // "manual": a person plays; the bot only logs state (no dialog exit, no auto start, no teleports)
+        if (AutoTestRole != "server" && AutoTestRole != "client" && AutoTestRole != "manual") {
             return;
         }
 
@@ -114,7 +115,16 @@ namespace GOTHIC_ENGINE {
         // A new game opens with Xardas talking to the hero. Players finish it before pressing
         // F1/F2; the bot ends it the same way the dialog's own end does.
         auto& infoMan = oCInformationManager::GetInformationManager();
-        if (!AutoTestSessionStarted && !infoMan.HasFinished() && elapsed - AutoTestLastDialogExitMs >= 1000) {
+        bool manual = AutoTestRole == "manual";
+        if (manual && !AutoTestSessionStarted && (ServerThread || ClientThread)) {
+            AutoTestSessionStarted = true;
+            json j;
+            j["event"] = "session_started";
+            j["by"] = ServerThread ? "F1" : "F2";
+            AutoTestWrite(j);
+        }
+
+        if (!manual && !AutoTestSessionStarted && !infoMan.HasFinished() && elapsed - AutoTestLastDialogExitMs >= 1000) {
             AutoTestLastDialogExitMs = elapsed;
             infoMan.Exit();
             json j;
@@ -122,7 +132,7 @@ namespace GOTHIC_ENGINE {
             AutoTestWrite(j);
         }
 
-        if (!AutoTestSessionStarted && elapsed >= AutoTestStartAfterMs && !ServerThread && !ClientThread
+        if (!manual && !AutoTestSessionStarted && elapsed >= AutoTestStartAfterMs && !ServerThread && !ClientThread
             && infoMan.HasFinished()) {
             AutoTestSessionStarted = true;
             if (AutoTestRole == "server") {
@@ -137,7 +147,7 @@ namespace GOTHIC_ENGINE {
             AutoTestWrite(j);
         }
 
-        if (AutoTestSessionStarted && AutoTestNextTeleport < AutoTestTeleports.size()
+        if (!manual && AutoTestSessionStarted && AutoTestNextTeleport < AutoTestTeleports.size()
             && elapsed >= (long long)AutoTestTeleports[AutoTestNextTeleport][0]) {
             auto& tp = AutoTestTeleports[AutoTestNextTeleport++];
             auto p = player->GetPositionWorld();
