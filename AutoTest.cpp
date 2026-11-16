@@ -3,7 +3,8 @@ namespace GOTHIC_ENGINE {
     //   "autotest": { "role": "server" | "client",
     //                 "startAfterMs": 8000,      // after the world is loaded
     //                 "reportEveryMs": 1000,
-    //                 "teleports": [ [40000, 600, 0, 0], ... ] }  // at ms after world load, move by dx,dy,dz
+    //                 "teleports": [ [40000, 600, 0, 0], ... ] }  // at ms after world load, move by dx,dy,dz;
+    //                 [ms, 0, 0, 0] = back to before the last teleport; 5th value 1 = hold there
     // Writes one JSON object per line to GothicCoopTest.log next to the exe.
     // It calls the same StartCoopServer/StartCoopClient as the F1/F2 keys.
 
@@ -15,7 +16,11 @@ namespace GOTHIC_ENGINE {
     static long long AutoTestWorldMs = 0;
     static long long AutoTestLastReportMs = 0;
     static bool AutoTestSessionStarted = false;
-    static std::vector<std::array<float, 4>> AutoTestTeleports;
+    static long long AutoTestLastDialogExitMs = -100000;
+    static std::vector<std::array<float, 5>> AutoTestTeleports;
+    static zVEC3 AutoTestBeforeTeleport;
+    static bool AutoTestHolding = false;
+    static zVEC3 AutoTestHoldPos;
     static size_t AutoTestNextTeleport = 0;
     static std::string AutoTestLogPath;
 
@@ -49,7 +54,7 @@ namespace GOTHIC_ENGINE {
         AutoTestReportEveryMs = c.value("reportEveryMs", 1000);
         if (c.contains("teleports")) {
             for (auto& tp : c["teleports"]) {
-                AutoTestTeleports.push_back({ tp[0].get<float>(), tp[1].get<float>(), tp[2].get<float>(), tp[3].get<float>() });
+                AutoTestTeleports.push_back({ tp[0].get<float>(), tp[1].get<float>(), tp[2].get<float>(), tp[3].get<float>(), tp.size() > 4 ? tp[4].get<float>() : 0.f });
             }
         }
 
@@ -106,7 +111,19 @@ namespace GOTHIC_ENGINE {
 
         auto elapsed = CurrentMs - AutoTestWorldMs;
 
-        if (!AutoTestSessionStarted && elapsed >= AutoTestStartAfterMs && !ServerThread && !ClientThread) {
+        // A new game opens with Xardas talking to the hero. Players finish it before pressing
+        // F1/F2; the bot ends it the same way the dialog's own end does.
+        auto& infoMan = oCInformationManager::GetInformationManager();
+        if (!AutoTestSessionStarted && !infoMan.HasFinished() && elapsed - AutoTestLastDialogExitMs >= 1000) {
+            AutoTestLastDialogExitMs = elapsed;
+            infoMan.Exit();
+            json j;
+            j["event"] = "dialog_exit";
+            AutoTestWrite(j);
+        }
+
+        if (!AutoTestSessionStarted && elapsed >= AutoTestStartAfterMs && !ServerThread && !ClientThread
+            && infoMan.HasFinished()) {
             AutoTestSessionStarted = true;
             if (AutoTestRole == "server") {
                 StartCoopServer();
@@ -124,15 +141,29 @@ namespace GOTHIC_ENGINE {
             && elapsed >= (long long)AutoTestTeleports[AutoTestNextTeleport][0]) {
             auto& tp = AutoTestTeleports[AutoTestNextTeleport++];
             auto p = player->GetPositionWorld();
+            // [ms, 0, 0, 0] goes back to where the previous teleport started
+            zVEC3 target = (tp[1] == 0 && tp[2] == 0 && tp[3] == 0)
+                ? AutoTestBeforeTeleport
+                : zVEC3(p[0] + tp[1], p[1] + tp[2], p[2] + tp[3]);
+            AutoTestBeforeTeleport = p;
+            // a fifth value of 1 holds the hero there (no falling) until the next teleport
+            AutoTestHolding = tp[4] != 0;
+            AutoTestHoldPos = target;
             // without collision detection, or walls push the hero back to where it was
             player->SetCollDet(FALSE);
-            player->SetPositionWorld(zVEC3(p[0] + tp[1], p[1] + tp[2], p[2] + tp[3]));
+            player->SetPositionWorld(target);
             player->SetCollDet(TRUE);
 
             json j;
             j["event"] = "teleport";
             j["me"] = AutoTestPos(player);
             AutoTestWrite(j);
+        }
+
+        if (AutoTestHolding) {
+            player->SetCollDet(FALSE);
+            player->SetPositionWorld(AutoTestHoldPos);
+            player->SetCollDet(TRUE);
         }
 
         if (elapsed - AutoTestLastReportMs >= AutoTestReportEveryMs) {
@@ -145,6 +176,7 @@ namespace GOTHIC_ENGINE {
             j["ping"] = CurrentPing;
             j["me"] = AutoTestPos(player);
             j["hp"] = player->GetAttribute(NPC_ATR_HITPOINTS);
+            j["talking"] = IsPlayerTalkingWithAnybody();
             j["syncNpcs"] = (int)SyncNpcs.size();
             j["broadcastNpcs"] = (int)BroadcastNpcs.size();
 
