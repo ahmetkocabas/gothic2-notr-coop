@@ -66,6 +66,9 @@ called `ExitProcess`, and a watchdog stack of the main thread if `Game_Loop` sto
 2026-11-16: 21/21, 21/21, 21/21; negative control 8/18 (all connection checks failed, as
 they must). No slow frames, watchdog reports or unexpected exits.
 
+2026-11-23 (after the story probes and the client dialog changes): 21/21, 21/21, 21/21; negative
+control 8/18. No slow frames, watchdog reports or unexpected exits.
+
 ## Shared-story research run
 
 ```
