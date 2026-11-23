@@ -47,30 +47,35 @@ simulates and publishes the NPCs near it).
 
 ## 4. Client dialogs (measured)
 
-A client talking to a host-driven NPC (bot: `talks` in the client config) opens the dialog
-camera, but the option menu never appears; the talk times out after 60 s. The NPC stays in a
-walk animation in place. Findings so far:
+**A person playing the client can talk to a host-driven NPC.** In a human session
+(2026-11-23, loaded save outside the tower, `qa/analyze_manual_talks.py`) the client talked
+to Xardas seven times while Xardas was host-driven on the client; the infos
+`DIA_XARDAS_PALADIN` and `DIA_XARDAS_EXIT` became told **on the client only**, nothing changed
+on the host. A host prayer at a shrine (`PC_PRAYSHRINE_*`) likewise changed only the host.
 
-1. `oCAIHuman_StandActions` (client only) stopped the focused NPC's animations and cleared its
-   message queue **every frame**, including during a dialog, which deletes the NPC's dialog
-   lines. Fixed: skipped while a dialog is open. Not enough on its own.
-2. Holding the talked-to NPC locally (no host updates while talking): not enough.
-3. Pausing all sync (F2) for the talk: not enough.
-4. Approaching the NPC from the other side (the host's hero was standing where the client
-   arrived): not enough.
+The bot's scripted talk (sending `EV_PROCESSINFOS` to the NPC instead of the player's talk
+action) opens the dialog camera on the client but never reaches the option menu. That is a
+limitation of the bot, not of the mod: it works on the host and in single player. Bot runs
+that tried to unblock it (no message clearing during a dialog, holding the NPC, pausing sync,
+approaching from the other side) did not change it. To bot-test client dialogs the bot has to
+start them the way the player does (focus the NPC and use the talk action).
 
-   Root cause unknown. Next: log the client NPC's message queue (`GetEM()`) and AI state during
-   the talk and compare with a working host talk; the sync code calls `ClearAIState`,
-   `KillMessages` and `ClearEM` on host-driven NPCs (`RemoteNpc::UpdateWeaponMode`), which may
-   leave the NPC unable to run `ZS_Talk`. Either way the design below routes client dialogs
-   through the host, where they work.
+The client also could not continue the opening dialog with Xardas when it connected while that
+dialog was running (first human test, 2026-11-16): finish the opening talk before pressing F2.
+
+One fix from that work stays: `oCAIHuman_StandActions` (client only) stopped the focused NPC's
+animations and cleared its message queue every frame, also during an open dialog.
 
 ## 5. Design: host-authoritative story with effect capture
 
 Following [effect-capture-story-sync](https://github.com/cranebeaker/coop-anything/blob/main/playbook/effect-capture-story-sync.md):
 only the host runs story scripts; what they change is sent to clients as data.
 
-**Dialogs are held on the host.**
+**Dialogs stay where they are, their results are shared.** (Client dialogs with host-driven
+NPCs already run locally; the gap is that the other side neither sees them nor gets their
+results.)
+
+**Optionally, dialogs are held on the host.**
 - A client who presses "talk" on an NPC sends an *intent* (NPC id). The host opens the dialog
   for the client's puppet (or for its own hero while the client is the "acting player") and
   sends the menu (info names and descriptions) to the client.
