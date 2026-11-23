@@ -65,3 +65,14 @@ called `ExitProcess`, and a watchdog stack of the main thread if `Game_Loop` sto
 
 2026-11-16: 21/21, 21/21, 21/21; negative control 8/18 (all connection checks failed, as
 they must). No slow frames, watchdog reports or unexpected exits.
+
+## Shared-story research run
+
+```
+powershell -File qa\run_story.ps1 -Root <root> [-ClientPausesForTalk]
+```
+
+Both copies log story snapshots (`storyEveryMs`), nearby NPCs (`nearRadius`) and run scripted
+talks (`talks`: walk up to an NPC, open its infos the way `ZS_Talk` does, pick options by name).
+`qa\analyze_story.py` reports what each side saw during the talks, the NPCs around a client far
+from the host, and how the two `GothicCoopStory.json` files differ. Findings: [SHARED-STORY.md](SHARED-STORY.md).
