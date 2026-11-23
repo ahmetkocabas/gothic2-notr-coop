@@ -27,6 +27,7 @@
 #include "CoopSession.cpp"
 #include "MultiInstance.cpp"
 #include "AutoTest.cpp"
+#include "StoryProbe.cpp"
 #include "Plugin.cpp"
 #include "UnionHooks.cpp"
 #pragma endregion

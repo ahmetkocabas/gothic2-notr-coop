@@ -4,9 +4,17 @@ namespace GOTHIC_ENGINE {
     //                 "startAfterMs": 8000,      // after the world is loaded
     //                 "reportEveryMs": 1000,
     //                 "teleports": [ [40000, 600, 0, 0], ... ] }  // at ms after world load, move by dx,dy,dz;
-    //                 [ms, 0, 0, 0] = back to before the last teleport; 5th value 1 = hold there
+    //                 [ms, 0, 0, 0] = back to before the last teleport; 5th value 1 = hold there;
+    //                 6th value 1 = dx,dy,dz is an absolute position. Story probes: StoryProbe.cpp
     // Writes one JSON object per line to GothicCoopTest.log next to the exe.
     // It calls the same StartCoopServer/StartCoopClient as the F1/F2 keys.
+
+    // StoryProbe.cpp (included after this file)
+    static void StoryProbeReadConfig(json& c);
+    void StoryProbeLoop(long long elapsed, bool sessionStarted);
+    static json StoryNearNpcs();
+    static json StoryNearFriends();
+    static int ProbeNearRadiusValue();
 
     static bool AutoTestEnabled = false;
     static bool AutoTestConfigRead = false;
@@ -17,7 +25,7 @@ namespace GOTHIC_ENGINE {
     static long long AutoTestLastReportMs = 0;
     static bool AutoTestSessionStarted = false;
     static long long AutoTestLastDialogExitMs = -100000;
-    static std::vector<std::array<float, 5>> AutoTestTeleports;
+    static std::vector<std::array<float, 6>> AutoTestTeleports;
     static zVEC3 AutoTestBeforeTeleport;
     static bool AutoTestHolding = false;
     static zVEC3 AutoTestHoldPos;
@@ -55,10 +63,11 @@ namespace GOTHIC_ENGINE {
         AutoTestReportEveryMs = c.value("reportEveryMs", 1000);
         if (c.contains("teleports")) {
             for (auto& tp : c["teleports"]) {
-                AutoTestTeleports.push_back({ tp[0].get<float>(), tp[1].get<float>(), tp[2].get<float>(), tp[3].get<float>(), tp.size() > 4 ? tp[4].get<float>() : 0.f });
+                AutoTestTeleports.push_back({ tp[0].get<float>(), tp[1].get<float>(), tp[2].get<float>(), tp[3].get<float>(), tp.size() > 4 ? tp[4].get<float>() : 0.f, tp.size() > 5 ? tp[5].get<float>() : 0.f });
             }
         }
 
+        StoryProbeReadConfig(c);
         AutoTestLogPath = std::string(GothicExeFolderPath) + "\\GothicCoopTest.log";
         AutoTestEnabled = true;
     }
@@ -152,7 +161,9 @@ namespace GOTHIC_ENGINE {
             auto& tp = AutoTestTeleports[AutoTestNextTeleport++];
             auto p = player->GetPositionWorld();
             // [ms, 0, 0, 0] goes back to where the previous teleport started
-            zVEC3 target = (tp[1] == 0 && tp[2] == 0 && tp[3] == 0)
+            // a sixth value of 1 makes dx,dy,dz an absolute position
+            zVEC3 target = tp[5] != 0 ? zVEC3(tp[1], tp[2], tp[3])
+                : (tp[1] == 0 && tp[2] == 0 && tp[3] == 0)
                 ? AutoTestBeforeTeleport
                 : zVEC3(p[0] + tp[1], p[1] + tp[2], p[2] + tp[3]);
             AutoTestBeforeTeleport = p;
@@ -169,6 +180,8 @@ namespace GOTHIC_ENGINE {
             j["me"] = AutoTestPos(player);
             AutoTestWrite(j);
         }
+
+        StoryProbeLoop(elapsed, AutoTestSessionStarted);
 
         if (AutoTestHolding) {
             player->SetCollDet(FALSE);
@@ -199,6 +212,12 @@ namespace GOTHIC_ENGINE {
                 players.push_back(pj);
             }
             j["players"] = players;
+            if (ProbeNearRadiusValue() > 0) {
+                j["near"] = StoryNearNpcs();
+                if (ServerThread) {
+                    j["nearFriend"] = StoryNearFriends();
+                }
+            }
             AutoTestWrite(j);
         }
     }
