@@ -201,6 +201,13 @@ namespace GOTHIC_ENGINE {
             return Ivk_oCAIHuman_StandActions(_this);
         }
 
+        // Clearing the NPC's messages is meant to stop the host-driven animation before a talk.
+        // During the talk it also deletes the NPC's dialog lines (EV_OUTPUT), so the dialog never
+        // moves on: leave the NPC alone while a dialog is open.
+        if (!oCInformationManager::GetInformationManager().HasFinished() || IsPlayerTalkingWithNpc(focusedNpc)) {
+            return Ivk_oCAIHuman_StandActions(_this);
+        }
+
         auto activeAnims = GetCurrentAni(focusedNpc);
         for (auto ani : activeAnims) {
             focusedNpc->GetModel()->StopAnimation(ani->aniName);

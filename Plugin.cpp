@@ -1,4 +1,4 @@
-﻿#include "resource.h"
+#include "resource.h"
 
 namespace GOTHIC_ENGINE {
     void Game_Entry() {
@@ -128,6 +128,14 @@ namespace GOTHIC_ENGINE {
             // erase() inside a range-for left the loop on a freed node; advance with erase's result
             for (auto it = SyncNpcs.begin(); it != SyncNpcs.end();) {
                 auto npc = it->second;
+                // Client in a dialog with a host-driven NPC: the dialog needs that NPC to turn and
+                // speak locally, which host updates (position, heading, animation) keep undoing.
+                // Hold the NPC locally until the dialog ends and drop what arrives meanwhile.
+                if (ClientThread && npc->npc && !IsCoopPlayer(npc->name) && IsPlayerTalkingWithNpc(npc->npc)) {
+                    npc->localUpdates.clear();
+                    ++it;
+                    continue;
+                }
                 npc->Update();
 
                 if (npc->destroyed) {
